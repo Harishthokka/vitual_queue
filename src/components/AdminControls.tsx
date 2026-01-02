@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Queue, QueueUser } from '@/hooks/useQueue';
-import { Play, Pause, UserCheck, Users } from 'lucide-react';
+import { Play, Pause, UserCheck, Users, SkipForward } from 'lucide-react';
 
 interface AdminControlsProps {
   queue: Queue;
@@ -13,6 +13,7 @@ interface AdminControlsProps {
 /**
  * Admin controls for managing the queue
  * - Serve Next: Mark next person as served
+ * - Skip: Skip current person and move to next
  * - Pause/Resume: Toggle queue accepting new entries
  */
 export function AdminControls({ queue, users }: AdminControlsProps) {
@@ -21,6 +22,19 @@ export function AdminControls({ queue, users }: AdminControlsProps) {
 
   const waitingUsers = users.filter(u => u.status === 'waiting');
   const nextUser = waitingUsers[0];
+
+  // Recalculate positions after serving/skipping
+  const recalculatePositions = async (excludeUserId: string) => {
+    const remainingUsers = waitingUsers.filter(u => u.id !== excludeUserId);
+    
+    // Update each user's position sequentially
+    for (let i = 0; i < remainingUsers.length; i++) {
+      await supabase
+        .from('queue_users')
+        .update({ position: i + 1 })
+        .eq('id', remainingUsers[i].id);
+    }
+  };
 
   // Serve the next person in queue
   const handleServeNext = async () => {
@@ -39,6 +53,9 @@ export function AdminControls({ queue, users }: AdminControlsProps) {
 
       if (userError) throw userError;
 
+      // Recalculate positions for remaining users
+      await recalculatePositions(nextUser.id);
+
       // Update queue's current_serving counter
       const { error: queueError } = await supabase
         .from('queues')
@@ -50,6 +67,34 @@ export function AdminControls({ queue, users }: AdminControlsProps) {
       toast({ title: `Called ${nextUser.name || `#${nextUser.position}`}` });
     } catch (err: any) {
       toast({ title: 'Failed to serve next', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Skip the next person in queue
+  const handleSkip = async () => {
+    if (!nextUser) {
+      toast({ title: 'No one to skip' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Mark current user as skipped
+      const { error: userError } = await supabase
+        .from('queue_users')
+        .update({ status: 'skipped' })
+        .eq('id', nextUser.id);
+
+      if (userError) throw userError;
+
+      // Recalculate positions for remaining users
+      await recalculatePositions(nextUser.id);
+
+      toast({ title: `Skipped ${nextUser.name || `#${nextUser.position}`}` });
+    } catch (err: any) {
+      toast({ title: 'Failed to skip', description: err.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -113,16 +158,29 @@ export function AdminControls({ queue, users }: AdminControlsProps) {
 
       {/* Action buttons */}
       <div className="space-y-3">
-        <Button 
-          onClick={handleServeNext}
-          disabled={loading || !nextUser}
-          variant="success"
-          size="xl"
-          className="w-full"
-        >
-          <UserCheck className="w-5 h-5" />
-          Serve Next
-        </Button>
+        <div className="grid grid-cols-2 gap-3">
+          <Button 
+            onClick={handleServeNext}
+            disabled={loading || !nextUser}
+            variant="success"
+            size="xl"
+            className="w-full"
+          >
+            <UserCheck className="w-5 h-5" />
+            Serve Next
+          </Button>
+
+          <Button 
+            onClick={handleSkip}
+            disabled={loading || !nextUser}
+            variant="outline"
+            size="xl"
+            className="w-full"
+          >
+            <SkipForward className="w-5 h-5" />
+            Skip
+          </Button>
+        </div>
 
         <Button 
           onClick={handleTogglePause}
