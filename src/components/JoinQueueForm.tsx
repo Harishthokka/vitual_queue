@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,14 +17,14 @@ interface JoinQueueFormProps {
 /**
  * Form for users to join a queue
  */
-export function JoinQueueForm({ 
+export const JoinQueueForm = forwardRef<HTMLDivElement, JoinQueueFormProps>(({
   queueId, 
   queueName, 
   isPaused, 
   currentCount, 
   maxCapacity,
   onJoined 
-}: JoinQueueFormProps) {
+}, ref) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -81,7 +81,7 @@ export function JoinQueueForm({
   };
 
   return (
-    <div className="space-y-6">
+    <div ref={ref} className="space-y-6">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold text-foreground">{queueName}</h2>
         <p className="text-muted-foreground">
@@ -123,4 +123,6 @@ export function JoinQueueForm({
       </form>
     </div>
   );
-}
+});
+
+JoinQueueForm.displayName = 'JoinQueueForm';
